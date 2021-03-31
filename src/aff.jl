@@ -6,12 +6,17 @@ using LinearAlgebra
 
 import Base: +, *, ^, -
 
+abstract type AbstractLinearization end
+struct MinRange <: AbstractLinearization end
+struct Chebyshev <: AbstractLinearization end
+const DEFAULT_LIN = MinRange
+
 """
 Affine form with center `c`, affine components `γ` and error `Δ`.
 
 Variant where Δ is an interval
 """
-struct Aff{N,T<:AbstractFloat}
+struct Aff{N,T<:Real,S<:AbstractLinearization}
     c::T   # mid-point
     γ::SVector{N,T}  # affine terms
     Δ::Interval{T}   # error term
@@ -27,24 +32,27 @@ end
 """
 Make an `Aff` based on an interval, which is number `i` of `n` total variables.
 """
-function Aff(X::Interval{T}, n, i) where {T}
+function Aff(X::Interval{T}, ::Val{N}, i, ::S) where {N,T,S}
     c = mid(X)
     r = radius(X)
-
-    γ = SVector(ntuple(j->i==j ? r : zero(r), n))
-
-    return Aff(c, γ, Interval{T}(0))
+    γ = SVector{N,T}(ntuple(j->i==j ? r : zero(r), N))
+    return Aff{N,T,S}(c, γ, Interval{T}(0))
+end
+function Aff(X::Interval{T}, ::Val{N}, i) where {N,T}
+    c = mid(X)
+    r = radius(X)
+    γ = SVector{N,T}(ntuple(j->i==j ? r : zero(r), N))
+    return Aff(c, γ, Interval{T}(0), DEFAULT_LIN)
 end
 
-+(x::Aff{N,T}, y::Aff{N,T}) where {N,T} = Aff(x.c + y.c, x.γ .+ y.γ, x.Δ + y.Δ)
-
--(x::Aff{N,T}, y::Aff{N,T}) where {N,T} = Aff(x.c - y.c, x.γ .- y.γ, x.Δ - y.Δ)
-
-
-interval(C::Aff) = C.c + sum(abs.(C.γ))*(-1..1) + C.Δ
++(x::Aff{N,T,S}, y::Aff{N,T,S}) where {N,S,T} = Aff{N,T,S}(x.c + y.c, x.γ .+ y.γ, x.Δ + y.Δ)
+-(x::Aff{N,T,S}, y::Aff{N,T,S}) where {N,S,T} = Aff{N,T,S}(x.c - y.c, x.γ .- y.γ, x.Δ - y.Δ)
 
 
-function *(x::Aff{N,T}, y::Aff{N,T}) where {N,T}
+interval(C::Aff{N,T,S}) where {N,T,S} = C.c + sum(abs.(C.γ))*(-1..1) + C.Δ
+
+
+function *(x::Aff{N,T,S}, y::Aff{N,T,S}) where {N,T,S}
     c = x.c * y.c
 
     γ = x.c .* y.γ + y.c .* x.γ
@@ -64,26 +72,25 @@ function *(x::Aff{N,T}, y::Aff{N,T}) where {N,T}
 
 end
 
-*(x::Aff, α::Real) = Aff(α*x.c, α.*x.γ, α*x.Δ)
-*(α::Real, x::Aff) = x * α
+*(x::Aff{N,T,S}, α::Real) where {N,T,S} = Aff{N,T,S}(α*x.c, α.*x.γ, α*x.Δ)
+*(α::Real, x::Aff{N,T,S}) where {N,T,S} = x * α
 
-+(x::Aff, α::Real) = Aff(α+x.c, x.γ, x.Δ)
-+(α::Real, x::Aff) = x + α
++(x::Aff{N,T,S}, α::Real) where {N,T,S} = Aff{N,T,S}(α+x.c, x.γ, x.Δ)
++(α::Real, x::Aff{N,T,S}) where {N,T,S} = x + α
 
--(x::Aff) = Aff(-x.c, .-(x.γ), -x.Δ)
--(x::Aff, α::Real) = Aff(x.c - α, x.γ, x.Δ)
--(α::Real, x::Aff) = α + (-x)
+-(x::Aff{N,T,S}) where {N,T,S} = Aff{N,T,S}(-x.c, .-(x.γ), -x.Δ)
+-(x::Aff{N,T,S}, α::Real) where {N,T,S} = Aff{N,T,S}(x.c - α, x.γ, x.Δ)
+-(α::Real{N,T,S}, x::Aff{N,T,S}) where {N,T,S} = α + (-x)
 
-/(x::Aff, α::Real) = Aff(x.c/α, x.γ/α, x.Δ/α)
+/(x::Aff{N,T,S}, α::Real) where {N,T,S} = Aff{N,T,S}(x.c/α, x.γ/α, x.Δ/α)
 
-function ^(x::Aff, n::Integer)
+function ^(x::Aff{N,T,S}, n::Integer) where {N,T,S}
 
     invert = false
 
     if n < 0
         invert = true
         n = -n
-        @show n
     end
 
     result = Base.power_by_squaring(x, n)
@@ -97,85 +104,28 @@ end
 
 Base.literal_pow(::typeof(^), x::Aff, ::Val{p}) where {T,p} = x^p
 
-x = Aff{2,Float64}(0.0, SVector(1.0, 0.0), 0..0)
-y = Aff{2,Float64}(0.0, SVector(0.0, 1.0), 0..0)
-
-
-x = Aff(3..5, 2, 1)
-y = Aff(2..4, 2, 2)
-#
-# 3-x
-# interval(3-x)
-#
-# x + y
-#
-#
-# interval(x+y)
-#
-# x * y
-# interval(x * y)
-#
-# interval(x * y)
-# interval(x) * interval(y)
-#
-# z = Aff(-1..1, 1, 1)
-# z^2
-# interval(z^2)
-#
-# using Polynomials
-#
-# p = Poly([-3, 1])
-# p2 = p^8
-#
-# x = 4 ± 1e-4
-# y = Aff(x, 1, 1)
-#
-# interval(y)
-# interval(p2(x))
-# interval(p2(y))
-#
-# @time interval(p2(y))
-#
-#
-# f( (x, y) ) = [x^3 + y, (x - y)^2]
-#
-# X = IntervalBox(-1..1, -1..1)
-#
-# f(X)
-#
-# xx = Aff(X[1], 2, 1)
-# yy = Aff(X[2], 2, 2)
-#
-# interval.(f((xx, yy)))
-#
-# f(X)
-#
-#
-#
-#
-# x = Aff(4..6, 1, 1)    # example from Messine
-# f(x) = x * (10 - x)
-#
-# f(x)
-# interval(f(x))
-#
-# interval(10*x - x^2)
-
 "General formula for affine approximation of nonlinear functions"
-function affine_approx(x::Aff, α, ζ, δ)
+function affine_approx(x::Aff{N,T,MinRange}, α, ζ, δ) where {N,T<:Real}
 
     c = α * x.c + ζ
     γ = α .* x.γ
     δ += α * x.Δ  # interval
 
-    return Aff(c, γ, δ)
+    return Aff{MinRange,N,T}(c, γ, δ)
 end
 
-function Base.sqrt(x::Aff, X=interval(x))
+function affine_approx(x::Aff{N,T,Chebyshev}, α, ζ, δ) where {N,T<:Real}
+
+    c = α * x.c + ζ
+    γ = α .* x.γ
+    δ += α * x.Δ  # interval
+
+    return Aff{Chebyshev,N,T}(c, γ, δ)
+end
+
+function Base.sqrt(x::Aff{N,T,MinRange}, X=interval(x)) where {N,T<:Real}
 
     a, b = X.lo, X.hi
-
-    # @show a, b
 
     # min-range:  de Figuereido book, pg. 64
     α = 1 / (2*√b)
@@ -185,11 +135,9 @@ function Base.sqrt(x::Aff, X=interval(x))
     return affine_approx(x, α, ζ, δ)
 end
 
-function Base.inv(x::Aff, X=interval(x))
+function Base.inv(x::Aff{N,T,MinRange}, X=interval(x)) where {N,T<:Real}
 
     a, b = X.lo, X.hi
-
-    # @show a, b
 
     # min-range:  de Figuereido book, pg. 70
     α = -1 / (b^2)
