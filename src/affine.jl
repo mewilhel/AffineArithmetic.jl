@@ -35,14 +35,14 @@ end
 """
 Make an `Affine` based on an interval, which is number `i` of `n` total variables.
 """
-function Affine(X::Interval{T}, n, i) where {T}
-    return Affine(Aff(X, n, i), X)
+function Affine(X::Interval{T}, i, ::Val{N}) where {N,T}
+    return Affine(Aff(X, i, Val(N)), X)
 end
 
-Affine(X::Interval) = Affine(X, 1, 1)
-Affine(X::Number) = Affine(Interval(X), 1, 1)
+Affine{N,T}(X::Interval{N,S}) where {N,T,S} = Affine{N,T}(X, 1, Val(N))
+Affine{N,T}(X::Number) where {N,T} = Affine{N,T}(Interval{T}(X), 1, Val(N))
 
-affine(Xs::Interval...) = Affine.(Xs, length(Xs), 1:length(Xs))
+affine(Xs::Interval...) = Affine.(Xs, 1:length(Xs), length(Xs))
 
 for op in (:+, :*, :-)
     @eval function $op(x::Affine, y::Affine)
@@ -87,7 +87,6 @@ function ^(x::Affine, n::Integer)
     if n < 0
         invert = true
         n = -n
-        # @show n
     end
 
     result = Base.power_by_squaring(x, n)

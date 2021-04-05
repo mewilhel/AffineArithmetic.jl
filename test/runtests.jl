@@ -1,8 +1,11 @@
 using AffineArithmetic, IntervalArithmetic, Polynomials, StaticArrays
 using Test
 
-using AffineArithmetic: Aff
+@testset "BaseAffine1" begin
+    x = BasicAffine1(Interval(1.0, 2.0), Val(2), 1)
+end
 
+#=
 @testset "Construction from intervals" begin
     X = 1..3
     X_a = Affine(X)
@@ -76,3 +79,4 @@ end
     x, y = affine(1..2, 3..4)
     @test interval(x + y - x - y) == 0..0
 end
+=#
