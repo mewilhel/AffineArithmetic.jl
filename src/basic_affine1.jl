@@ -35,6 +35,25 @@ function BasicAffine1(X::Interval{T}, ::Val{N}, i::Int) where {N,T}
     return BasicAffine1(X, Val(N), i, DEFAULT_LIN())
 end
 
+
+## Promotion rules
+promote_rule(::Type{BasicAffine1{N,T,S}}, ::Type{BasicAffine1{N,Q,S}}) where {N, T<:Real, Q<:Real, S} =
+    BasicAffine1{N, promote_type(T,Q), S}
+
+promote_rule(::Type{BasicAffine1{N,T,S}}, ::Type{Q}) where {N, T<:Real, Q<:Real, S} =
+    BasicAffine1{N, promote_type(T,Q), S}
+
+promote_rule(::Type{BigFloat}, ::Type{BasicAffine1{N,T,S}}) where {N, T<:Real,S} =
+    BasicAffine1{N, promote_type(T,BigFloat), S}
+
+
+# convert methods:
+convert(::Type{BasicAffine1{N,T,S}}, x::Bool) where {N,T,S} = convert(BasicAffine1{N,T,S}, Int(x))
+convert(::Type{BasicAffine1{N,T,S}}, x::Real) where {N,T,S} = BasicAffine1{N,T,S}(atomic(Interval{T}, x))
+convert(::Type{BasicAffine1{N,T,S}}, x::T) where {N,T<:Real,S} = BasicAffine1{N,T,S}(x)
+convert(::Type{BasicAffine1{N,T,S}}, x::Interval{T}) where {N,T,S} = x
+convert(::Type{BasicAffine1{N,T,S}}, x::Interval) where {N,T,S} = BasicAffine1{N,T,S}(atomic(Interval{T}, x))
+
 for f in (:+,:-)
     @eval function ($f)(x::BasicAffine1{N,T,S}, y::BasicAffine1{N,T,S}) where {N,T<:Real,S<:AbstractLinearization}
         BasicAffine1{N,T,S}(($f).(x.c, y.c), ($f).(x.γ,y.γ), ($f).(x.Δ,y.Δ))
@@ -79,6 +98,57 @@ end
 /(x::BasicAffine1{N,T,S}, α::T) where {N,T<:Real,S<:AbstractLinearization} = BasicAffine1{N,T,S}(x.c/α, x.γ/α, x.Δ/α)
 /(α::T, x::BasicAffine1{N,T,S}) where {N,T<:Real,S<:AbstractLinearization} = α*inv(x)
 
+
+function power_by_squaring(x, p::Integer)
+    if p == 1
+        return copy(x)
+    elseif p == 0
+        return one(x)
+    elseif p == 2
+        return x*x
+    elseif p < 0
+        isone(x) && return copy(x)
+        isone(-x) && return iseven(p) ? one(x) : copy(x)
+        Base.throw_domerr_powbysq(x, p)
+    end
+    t = trailing_zeros(p) + 1
+    p >>= t
+    x = x
+    while (t -= 1) > 0
+        x *= x
+    end
+    y = x
+    while p > 0
+        t = trailing_zeros(p) + 1
+        p >>= t
+        while (t -= 1) >= 0
+            x *= x
+        end
+        y *= x
+    end
+    return y
+end
+
+# Ran into the following error so re-defined power by squaring:
+#=
+ERROR: LoadError: MethodError: Cannot `convert` an object of type
+  BasicAffine1{2, Float64, MinRange} to an object of type
+  Union{}
+Closest candidates are:
+  convert(::Type{Union{}}, ::Any) at essentials.jl:203
+  convert(::Type{var"#s53"} where var"#s53"<:Polynomials.AbstractPolynomial, ::Any) at C:\Users\wilhe\.julia\packages\Polynomials\1aa8e\src\common.jl:309
+  convert(::Type{T}, ::Any) where T<:VecElement at baseext.jl:8
+  ...
+Stacktrace:
+  [1] convert(#unused#::Core.TypeofBottom, x::BasicAffine1{2, Float64, MinRange})
+    @ Base .\essentials.jl:203
+  [2] to_power_type(x::BasicAffine1{2, Float64, MinRange})
+    @ Base .\intfuncs.jl:240
+  [3] power_by_squaring(x_::BasicAffine1{2, Float64, MinRange}, p::Int64)
+    @ Base .\intfuncs.jl:255
+  [4] ^(x::BasicAffine1{2, Float64, MinRange}, n::Int64)
+    @ AffineArithmetic ~\Desktop\Package Development\AffineArithmetic.jl\src\basic_affine1.jl:14
+=#
 function ^(x::BasicAffine1{N,T,S}, n::Integer) where {N,T<:Real,S<:AbstractLinearization}
 
     invert = false
@@ -88,7 +158,7 @@ function ^(x::BasicAffine1{N,T,S}, n::Integer) where {N,T<:Real,S<:AbstractLinea
         n = -n
     end
 
-    result = Base.power_by_squaring(x, n)
+    result = power_by_squaring(x, n)
 
     if invert
         result = inv(result)
@@ -108,7 +178,39 @@ function affine_approx(x::BasicAffine1{N,T,S}, α, ζ, δ) where {N,T<:Real,S<:A
 
     return BasicAffine1{MinRange,N,T}(c, γ, δ)
 end
-
+# to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+# to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+#=
+function power_by_squaring(x_, p::Integer)
+    x = to_power_type(x_)
+    if p == 1
+        return copy(x)
+    elseif p == 0
+        return one(x)
+    elseif p == 2
+        return x*x
+    elseif p < 0
+        isone(x) && return copy(x)
+        isone(-x) && return iseven(p) ? one(x) : copy(x)
+        throw_domerr_powbysq(x, p)
+    end
+    t = trailing_zeros(p) + 1
+    p >>= t
+    while (t -= 1) > 0
+        x *= x
+    end
+    y = x
+    while p > 0
+        t = trailing_zeros(p) + 1
+        p >>= t
+        while (t -= 1) >= 0
+            x *= x
+        end
+        y *= x
+    end
+    return y
+end
+=#
 function Base.sqrt(x::BasicAffine1{N,T,MinRange}, X=interval(x)) where {N,T<:Real,S<:AbstractLinearization}
 
     a, b = X.lo, X.hi

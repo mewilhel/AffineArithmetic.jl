@@ -5,7 +5,7 @@ using DiffRules: diffrule
 
 import IntervalArithmetic: interval
 import Base: +, -, *, /, ^, ==, exp, exp2, exp10, expm1, log, log2,
-             log10, log1p, acosh, zero, one, range, show
+             log10, log1p, acosh, zero, one, range, show, promote_rule, convert
 
 abstract type AbstractLinearization end
 struct MinRange <: AbstractLinearization end
@@ -20,6 +20,6 @@ const Affine = BasicAffine1
 
 export Affine, BasicAffine1, MinRange, Chebyshev
 export +, -, *, /, ^, ==, exp, exp2, exp10, expm1, log, log2,
-       log10, log1p, acosh, zero, one, range, show
+       log10, log1p, acosh, zero, one, range, show, promote_rule, convert
 
 end
