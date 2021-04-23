@@ -80,8 +80,7 @@ function *(x::BasicAffine1{N,T,S}, y::BasicAffine1{N,T,S}) where {N,T,S}
 
     Δ += x.Δ * y.Δ
 
-    return BasicAffine1(c, γ, Δ)
-
+    return BasicAffine1{N,T,S}(c, γ, Δ)
 end
 
 # Scalar Operations
