@@ -18,6 +18,8 @@ include("basic_affine1.jl")
 
 const Affine = BasicAffine1
 
-export Affine, BasicAffine1
+export Affine, BasicAffine1, MinRange, Chebyshev
+export +, -, *, /, ^, ==, exp, exp2, exp10, expm1, log, log2,
+       log10, log1p, acosh, zero, one, range, show
 
 end

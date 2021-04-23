@@ -20,7 +20,7 @@ end
 Make a `BasicAffine1` based on an interval, which is number `i` of `n` total variables
 specifying a linearization mode of type `S`.
 """
-function BasicAffine1(X::Interval{T}, ::Val{N}, i, ::S) where {N,T,S}
+function BasicAffine1(X::Interval{T}, ::Val{N}, i::Int, ::S) where {N,T,S}
     c = mid(X)
     r = radius(X)
     γ = SVector{N,T}(ntuple(j->i==j ? r : zero(r), N))
@@ -31,7 +31,7 @@ end
 Make a `BasicAffine1` based on an interval, which is number `i` of `n` total variables
 using the default linearization mode.
 """
-function BasicAffine1(X::Interval{T}, ::Val{N}, i) where {N,T}
+function BasicAffine1(X::Interval{T}, ::Val{N}, i::Int) where {N,T}
     return BasicAffine1(X, Val(N), i, DEFAULT_LIN())
 end
 
